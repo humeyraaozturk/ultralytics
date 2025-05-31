@@ -5,7 +5,8 @@
 # Task docs: https://docs.ultralytics.com/tasks/detect
 
 # Parameters
-nc: 80 # number of classes
+#nc 80 yerine 4 olarak değiştirildi. "insan, tasit, uai, uap"
+nc: 4 # number of classes
 scales: # model compound scaling constants, i.e. 'model=yolov8n.yaml' will call yolov8.yaml with scale 'n'
   # [depth, width, max_channels]
   n: [0.33, 0.25, 1024] # YOLOv8n-world summary: 161 layers, 4204111 parameters, 4204095 gradients, 39.6 GFLOPs
@@ -48,4 +49,5 @@ head:
   - [[-1, 9], 1, Concat, [1]] # cat head P5
   - [-1, 3, C2fAttn, [1024, 512, 16]] # 22 (P5/32-large)
 
-  - [[15, 19, 22], 1, WorldDetect, [nc, 512, False]] # Detect(P3, P4, P5)
+  #"[[15, 19, 22], 1, Detect, [nc, 512, False]]" satırı değiştirildi.
+  - [[15, 19, 22], 1, Detect, [nc]] # Detect(P3, P4, P5)

@@ -674,7 +674,7 @@ class C2fAttn(nn.Module):
         self.m = nn.ModuleList(Bottleneck(self.c, self.c, shortcut, g, k=((3, 3), (3, 3)), e=1.0) for _ in range(n))
         self.attn = MaxSigmoidAttnBlock(self.c, self.c, gc=gc, ec=ec, nh=nh)
 
-    def forward(self, x: torch.Tensor, guide: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, guide: torch.Tensor = None) -> torch.Tensor:
         """
         Forward pass through C2f layer with attention.
 
@@ -687,8 +687,23 @@ class C2fAttn(nn.Module):
         """
         y = list(self.cv1(x).chunk(2, 1))
         y.extend(m(y[-1]) for m in self.m)
+        
+        #################################################################################################
+        if guide == None:
+            guide = x[-1]  # This selects the last feature map output from the previous layer
+            
+            if x.ndim == 4:
+                guide = x.mean(dim=[2, 3], keepdim=True)  # [B, C]
+            elif x.ndim == 3:
+                guide = x.mean(dim=2)       # [B, C]
+            elif x.ndim == 2:
+                guide = x                   # zaten uygun
+            guide = guide.flatten(1)  # Flatten the features into a vector per batch
+        #################################################################################################
+        
         y.append(self.attn(y[-1], guide))
         return self.cv2(torch.cat(y, 1))
+
 
     def forward_split(self, x: torch.Tensor, guide: torch.Tensor) -> torch.Tensor:
         """
