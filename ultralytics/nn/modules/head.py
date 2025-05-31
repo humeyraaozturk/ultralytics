@@ -196,10 +196,14 @@ class Detect(nn.Module):
         for a, b, s in zip(m.cv2, m.cv3, m.stride):  # from
             a[-1].bias.data[:] = 1.0  # box
             b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+            #b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (1920 / s) ** 2)
+
         if self.end2end:
             for a, b, s in zip(m.one2one_cv2, m.one2one_cv3, m.stride):  # from
                 a[-1].bias.data[:] = 1.0  # box
                 b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+                #b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (1920 / s) ** 2)
+
 
     def decode_bboxes(self, bboxes: torch.Tensor, anchors: torch.Tensor, xywh: bool = True) -> torch.Tensor:
         """Decode bounding boxes from predictions."""
@@ -627,7 +631,8 @@ class YOLOEDetect(Detect):
 
     is_fused = False
 
-    def __init__(self, nc: int = 80, embed: int = 512, with_bn: bool = False, ch: Tuple = ()):
+    #init fonksiyon tanımında x'ten sonra cls_pe parametresini ekledik.
+    def __init__(self, nc: int = 80, embed: int = 512, with_bn: bool = False, ch: Tuple = (), cls_pe: torch.Tensor = None):
         """
         Initialize YOLO detection layer with nc classes and layer channels ch.
 
@@ -639,6 +644,7 @@ class YOLOEDetect(Detect):
         """
         super().__init__(nc, ch)
         c3 = max(ch[0], min(self.nc, 100))
+        
         assert c3 <= embed
         assert with_bn is True
         self.cv3 = (
@@ -659,6 +665,11 @@ class YOLOEDetect(Detect):
         self.reprta = Residual(SwiGLUFFN(embed, embed))
         self.savpe = SAVPE(ch, c3, embed)
         self.embed = embed
+        
+        ##############################################
+        self.cls_pe = cls_pe
+        ##############################################
+        
 
     @smart_inference_mode()
     def fuse(self, txt_feats: torch.Tensor):
@@ -758,14 +769,20 @@ class YOLOEDetect(Detect):
         else:
             return y if self.export else (y, x)
 
+    #forward fonksiyonu tanımında x'ten sonra gelen cls_pe parametresini sildik.
+    # cls_pe: torch.Tensor,
     def forward(
-        self, x: List[torch.Tensor], cls_pe: torch.Tensor, return_mask: bool = False
+        self, x: List[torch.Tensor], return_mask: bool = False
     ) -> Union[torch.Tensor, Tuple]:
         """Process features with class prompt embeddings to generate detections."""
         if hasattr(self, "lrpc"):  # for prompt-free inference
             return self.forward_lrpc(x, return_mask)
+        
+        ###################################
+        #cls_pe = self.cls_pe
+        ###################################
         for i in range(self.nl):
-            x[i] = torch.cat((self.cv2[i](x[i]), self.cv4[i](self.cv3[i](x[i]), cls_pe)), 1)
+            x[i] = torch.cat((self.cv2[i](x[i]), self.cv4[i](self.cv3[i](x[i]), self.cls_pe)), 1)
         if self.training:
             return x
         self.no = self.nc + self.reg_max * 4  # self.nc could be changed when inference with different texts
